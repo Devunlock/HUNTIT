@@ -103,36 +103,36 @@ export const login = async (req, res) => {
     );
 
     res.json({
-        message: "Login successful",
-        token,
-        user
-    })
+      message: "Login successful",
+      token,
+      user,
+    });
   } catch (err) {
     res.status(500).json({
-      message: err.message
+      message: err.message,
     });
   }
 };
 
 // Fetch profile
 export const getProfile = async (req, res) => {
-    try {
-        const user = await User.findById(req.user.id).select("-password");
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found"
-            });
-        }
-        res.json({
-            success: true,
-            user
-        });
-    } catch (err) {
-        res.status(500).json({
-            message: err.message
-        });
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
-}
+    res.json({
+      success: true,
+      user,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+};
 
 // Email Verification
 export const verifyEmail = async (req, res) => {
@@ -141,9 +141,131 @@ export const verifyEmail = async (req, res) => {
 
     if (!email || !code) {
       return res.status(400).json({
-        message: "Email and verification code are required."
+        message: "Email and verification code are required.",
       });
     }
 
-  } catch (err) {}
-}
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        message: "Email is already verified.",
+      });
+    }
+
+    if (user.verificationToken !== code) {
+      return res.status(400).json({
+        message: "Invalid verification code.",
+      });
+    }
+
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    await user.save();
+
+    res.status(200).json({
+      message: "Email verified successfully.",
+      success: true,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+      success: false,
+    });
+  }
+};
+
+// Forgot Password
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "No user found with that email address" });
+    }
+
+    const resetToken = crypto.randomBytes(20).toString("hex");
+    const resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins
+
+    user.resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+    user.resetPasswordExpire = resetPasswordExpire;
+    await user.save();
+
+    const clientUrl = "http://localhost:5173";
+    const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
+    const message = `
+            <h2>Password Reset Request</h2>
+            <p>You requested a password reset. Please click on the link below to reset your password:</p>
+            <a href="${resetUrl}" clicktracking="off">${resetUrl}</a>
+            <p>This link will expire in 15 minutes.</p>
+        `;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: "Password Reset - Real Estate Platform",
+        message,
+      });
+      res
+        .status(200)
+        .json({ message: "Password reset email sent", success: true });
+    } catch (error) {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+      return res
+        .status(500)
+        .json({ message: "Could not send email", success: false });
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message, success: false });
+  }
+};
+
+// Reset Password
+export const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    const resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid or expired password reset token",
+        success: false,
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+    res
+      .status(200)
+      .json({ message: "Password reset successful", success: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message, success: false });
+  }
+};

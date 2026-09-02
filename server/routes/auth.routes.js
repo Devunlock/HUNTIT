@@ -1,0 +1,1 @@
+const authRouter = express.Router();
