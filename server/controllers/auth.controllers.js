@@ -1,7 +1,7 @@
-import User from "../models/user";
+import User from "../models/user.model.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import sendEmail from "../utils/sendEmail";
+import sendEmail from "../utils/sendEmail.js";
 
 // Register
 export const register = async (req, res) => {
@@ -115,7 +115,7 @@ export const login = async (req, res) => {
 };
 
 // Fetch profile
-export const getProfile = async (req, res) => {
+export const getMyProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     if (!user) {
