@@ -4,6 +4,7 @@ import http from "http";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import authRouter from "./routes/auth.routes.js";
+import userRouter from "./routes/user.routes.js";
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 
 // Routes
 app.use("/api/auth", authRouter);
+app.use("/api/user", userRouter)
 
 app.get("/", (req, res) => {
     res.send("API LIT🔥!");
